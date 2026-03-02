@@ -1,12 +1,18 @@
 /**
- * Standalone entry point for production ECS worker task.
- * Phase 3 will implement: config load → DB upsert → poll loop (startPoller()).
+ * Standalone entry point for the production ECS worker task.
+ * Runs config sync + poll loop without any Next.js overhead.
+ * Usage: tsx src/lib/worker.ts  (or compiled: node dist/worker.js)
  */
+import { startPoller } from "@/lib/poller";
+import { logger } from "@/lib/logger";
+
 async function main() {
-  console.log("Worker entry point — poller will run here (Phase 3)");
+  logger.info("Worker starting (standalone mode)");
+  await startPoller();
+  // startPoller runs setInterval — process stays alive
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch((err: unknown) => {
+  logger.error({ err }, "Worker startup failed");
   process.exit(1);
 });
