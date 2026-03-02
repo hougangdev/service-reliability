@@ -84,42 +84,49 @@ npm run dev
 ## Architecture
 
 ```
-┌───────────────────────────────────────────────────────┐
-│  Next.js Container                                    │
-│                                                       │
-│  ┌─────────────────┐  ┌──────────────────────────┐   │
-│  │  Dashboard UI   │  │  API Route Handlers      │   │
-│  │  (React / SSR)  │  │  GET /api/services       │   │
-│  │  TanStack Query │  │  GET /api/services/:id   │   │
-│  │  auto-refresh   │  │  GET /api/services/:id/  │   │
-│  └─────────────────┘  │       history            │   │
-│                        │  GET /api/monitor/health │   │
-│                        │  POST /api/run-once      │   │
-│                        └──────────────────────────┘   │
-│                                                       │
-│  ┌────────────────────────────────────────────────┐   │
-│  │  Poller (instrumentation.ts)                   │   │
-│  │  · setInterval loop (configurable)             │   │
-│  │  · Concurrent HTTP checks (p-limit, max 10)    │   │
-│  │  · Version extraction: JSON path + header      │   │
-│  │  · Consecutive failure alerting + webhook      │   │
-│  │  · Run lock (no overlapping cycles)            │   │
-│  │  · Retention: 7-day age + 500/service cap      │   │
-│  └────────────────────────────────────────────────┘   │
-└───────────────────────┬───────────────────────────────┘
-                        │
-                 ┌──────▼──────┐
-                 │  PostgreSQL  │
-                 └─────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  Next.js Container                                       │
+│                                                          │
+│  ┌─────────────────┐  ┌───────────────────────────────┐  │
+│  │  Dashboard UI   │  │  API Route Handlers           │  │
+│  │  (React / SSR)  │  │  GET /api/services            │  │
+│  │  TanStack Query │  │  GET /api/services/:id        │  │
+│  │  auto-refresh   │  │  GET /api/services/:id/       │  │
+│  └─────────────────┘  │       history                 │  │
+│                        │  GET /api/monitor/health      │  │
+│                        │  GET /api/incidents/summary ──┼──┼──► Anthropic API
+│                        │  POST /api/run-once           │  │    (Claude Haiku)
+│                        └───────────────────────────────┘  │
+│                                                          │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │  Poller (instrumentation.ts)                        │  │
+│  │  · setInterval loop (configurable)                  │  │
+│  │  · Concurrent HTTP checks (p-limit, max 10)         │  │
+│  │  · Version extraction: JSON path + header           │  │
+│  │  · Incident detection: down/drift/flapping/degraded │  │
+│  │  · Consecutive failure alerting + webhook           │  │
+│  │  · Run lock (no overlapping cycles)                 │  │
+│  │  · Retention: 7-day age + 500/service cap           │  │
+│  └─────────────────────────────────────────────────────┘  │
+└──────────────────────────┬───────────────────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │  PostgreSQL  │
+                    └──────▲──────┘
+                           │
+┌──────────────────────────┴───────────────────────────────┐
+│  Standalone Worker (worker.ts)                            │
+│  Same poller code, separate process (ECS Fargate target)  │
+└──────────────────────────────────────────────────────────┘
 
-┌────────────────────────────────────────────────────────┐
-│  Mock Services (Express)                               │
-│  GET /api/healthy       → 200, version "2.1.0"         │
-│  GET /api/degraded      → 200, 1.5 s delay             │
-│  GET /api/wrong-version → 200, version "1.9.0"         │
-│  GET /api/failing       → 503 every other request      │
-│  GET /api/timeout       → hangs 10 s                   │
-└────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  Mock Services (Express)                                  │
+│  GET /api/healthy       → 200, version "2.1.0"            │
+│  GET /api/degraded      → 200, 1.5 s delay                │
+│  GET /api/wrong-version → 200, version "1.9.0"            │
+│  GET /api/failing       → 503 every other request         │
+│  GET /api/timeout       → hangs 10 s                      │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ### Design Overview
@@ -310,6 +317,32 @@ Production runs on **AWS App Runner** with two services:
 Structured pino JSON logs flow to CloudWatch via App Runner's built-in log streaming. Use CloudWatch Logs Insights to query structured fields directly.
 
 For full infrastructure details, CI/CD pipeline documentation, and deployment troubleshooting, see [docs/ci-cd.md](docs/ci-cd.md).
+
+---
+
+## Production Gotchas
+
+- **`DATABASE_URL` not validated at startup** — the lazy Proxy defers pool creation to the first query, so a missing or invalid connection string won't surface until the first API call or poll cycle.
+- **In-memory alert state resets on every deploy** — consecutive failure counters and rate-limit timestamps live in memory. A redeploy resets them, which can cause a duplicate alert for an ongoing incident.
+- **Connection pool limits** — each App Runner instance opens up to 20 connections. `db.t3.micro` supports ~85 connections, so you can safely run ~4 instances before hitting the limit. Scale beyond that requires PgBouncer or an RDS upgrade.
+- **Health endpoint returns 200 before first poll** — on a fresh deploy, `/api/monitor/health` returns `ok: true` with `lastRunAt: null` because no poll cycle has completed yet. Upstream health checks should account for this.
+- **`services.yaml` changes require a poller restart** — there is no hot-reload. After editing the config, restart the container or process to pick up changes.
+- **Retention cap of 500 checks is ~4 hours at 30s intervals** — if you need longer history, increase `MAX_CHECKS_PER_SERVICE` or lower the poll frequency.
+- **TLS/DNS errors trigger immediate consecutive failure alerts** — these are not retried (by design), so a DNS blip can escalate to an alert after just 3 cycles (90 seconds at default interval).
+- **No recovery/resolved alerts** — the system alerts when a service goes down but does not notify when it comes back up.
+- **Migration failure blocks web server startup** — the Docker entrypoint runs migrations before starting Next.js. A bad migration will prevent the container from starting.
+
+---
+
+## Future Improvements
+
+- **Standalone worker deployment** — wire `worker.ts` into CI/CD as an ECS Fargate task, decoupling polling from the web server.
+- **Recovery alerts** — notify when a previously-down service returns to healthy.
+- **Persistent alert state** — move consecutive failure counters and rate-limit timestamps from in-memory Maps to the database, eliminating duplicate alerts on redeploy.
+- **Connection pooling** — add PgBouncer as a sidecar or upgrade the RDS instance class to support more App Runner instances.
+- **DNS retry policy** — add a short retry window for transient `ENOTFOUND` errors to reduce false-positive alerts during DNS propagation.
+- **Hot-reload for `services.yaml`** — watch the config file for changes and re-sync without a full restart.
+- **Dashboard empty state / onboarding UX** — show a guided setup experience when no services are configured instead of an empty table.
 
 ---
 
