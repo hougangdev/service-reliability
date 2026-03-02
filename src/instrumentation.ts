@@ -1,7 +1,6 @@
 /**
  * Next.js instrumentation hook — runs once when the server starts.
- * Starts the poller in local dev / single-container mode.
- * Production separates this into the standalone worker task.
+ * Starts the embedded poller in both dev and production (App Runner).
  */
 export async function register() {
   // Only run in the Node.js runtime (not Edge), and only server-side

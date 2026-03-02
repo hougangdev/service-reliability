@@ -2,7 +2,48 @@
 
 A lightweight, self-hosted service reliability monitor. Periodically polls HTTP endpoints, detects availability and version drift, persists results, and surfaces a live dashboard with a REST API.
 
-**Stack:** TypeScript · Next.js 15 (App Router) · Tailwind CSS · shadcn/ui · Drizzle ORM · PostgreSQL · Docker · AWS (ECS Fargate + RDS)
+**Stack:** TypeScript · Next.js 15 (App Router) · Tailwind CSS · shadcn/ui · Drizzle ORM · PostgreSQL · Docker · AWS (App Runner + RDS)
+
+---
+
+## Quickstart
+
+```bash
+# 1. Clone and copy environment config
+cp .env.example .env.local
+
+# 2. Start the full stack (Postgres + mock services + app)
+docker compose up --build
+
+# Dashboard → http://localhost:3000
+# Mock services → http://localhost:3001
+```
+
+The `app` container automatically applies database migrations on startup before booting the Next.js server.
+
+### Run without Docker (local dev)
+
+```bash
+# Prerequisites: Node 22+, a running Postgres instance
+
+# Install dependencies
+npm install
+
+# Start Postgres (Docker only, no app)
+docker compose up db -d
+
+# Copy and configure environment
+cp .env.example .env.local
+# Edit .env.local — set DATABASE_URL if different
+
+# Apply migrations
+npm run db:migrate
+
+# Start development server (poller runs via instrumentation.ts)
+npm run dev
+
+# Dashboard → http://localhost:3000
+```
 
 ---
 
@@ -47,46 +88,15 @@ A lightweight, self-hosted service reliability monitor. Periodically polls HTTP 
 └────────────────────────────────────────────────────────┘
 ```
 
----
+### Design Overview
 
-## Quickstart
+The monitor uses a **polling-based** approach rather than requiring webhooks or agents on monitored services. This is a deliberate trade-off: polling works with any HTTP endpoint out of the box — no registration, no callback URLs, no firewall rules. The 30-second default interval balances detection speed against load on monitored services.
 
-```bash
-# 1. Clone and copy environment config
-cp .env.example .env.local
+Service definitions follow a **config-as-code** philosophy. `services.yaml` is the source of truth, version-controlled alongside application code. On startup, the poller syncs this file to the database — inserting new services, updating changed ones, and soft-deleting removed ones (preserving their check history).
 
-# 2. Start the full stack (Postgres + mock services + app)
-docker compose up --build
+Data retention uses a **dual strategy**: age-based (default 7 days) and count-based (default 500 per service). At 30-second intervals, a single service generates ~20k checks per week. The age window handles normal cleanup; the per-service cap acts as a safety net against accumulation.
 
-# Dashboard → http://localhost:3000
-# Mock services → http://localhost:3001
-```
-
-The `app` container automatically applies database migrations on startup before booting the Next.js server.
-
-### Run without Docker (local dev)
-
-```bash
-# Prerequisites: Node 22+, a running Postgres instance
-
-# Install dependencies
-npm install
-
-# Start Postgres (Docker only, no app)
-docker compose up db -d
-
-# Copy and configure environment
-cp .env.example .env.local
-# Edit .env.local — set DATABASE_URL if different
-
-# Apply migrations
-npm run db:migrate
-
-# Start development server (poller runs via instrumentation.ts)
-npm run dev
-
-# Dashboard → http://localhost:3000
-```
+For detailed diagrams and data flow descriptions, see [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -206,7 +216,7 @@ service-reliability/
 │   │   ├── monitoring/         # HTTP checker, version extractor, alerting, retention, orchestrator
 │   │   ├── services/           # Service query helpers + response types
 │   │   └── logger.ts           # pino (JSON in prod, pretty in dev)
-│   ├── worker.ts               # Standalone poller entry (ECS worker task)
+│   ├── worker.ts               # Standalone poller entry (production-ready, not yet deployed via CI/CD)
 │   └── instrumentation.ts      # Next.js hook → starts poller in dev
 ├── __tests__/                  # Vitest tests mirroring src structure
 ├── mock-services/              # Express mock server (demo endpoints)
@@ -240,7 +250,7 @@ service-reliability/
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| **Poller entry points** | Dual: `instrumentation.ts` (local) + `worker.ts` (prod) | Same poller code, different entry points. Local = single container. Production = separate ECS task. |
+| **Poller entry points** | Dual: `instrumentation.ts` (embedded) + `worker.ts` (standalone) | Same poller code, different entry points. Production currently uses embedded mode via `instrumentation.ts`. Standalone `worker.ts` is available but not yet wired into CI/CD. |
 | **ORM** | Drizzle | Lightweight, SQL-like, TypeScript-native. Smaller bundle than Prisma. |
 | **Config format** | YAML → DB upsert (soft delete) | YAML is version-controlled source of truth. DB enables relational queries. Removed services are marked inactive, history is preserved. |
 | **Version extraction** | JSON path + response header | Per-service config. Covers REST APIs (body) and legacy services (headers). |
@@ -256,15 +266,26 @@ service-reliability/
 
 ## Infrastructure (AWS Deployment)
 
-The production deployment uses three separate ECS Fargate tasks behind a single ALB:
+Production runs on **AWS App Runner** with two services:
 
-- **web task** — Next.js (dashboard + API routes). Behind the ALB on port 80. Scales horizontally.
-- **worker task** — Standalone poller (`worker.ts`). Single instance. No ALB. Can restart independently of web.
-- **mock-services task** — Express demo server. Used by the configured service endpoints.
+- **web** — Next.js (dashboard + API routes + embedded poller). Auto-deploys on ECR image push. Health-checked at `/api/monitor/health`.
+- **mock-services** — Express demo server. Auto-deploys independently. URL stored in SSM Parameter Store and injected into `services.yaml` at build time.
 
-RDS PostgreSQL (`db.t3.micro`, single-AZ) serves as the shared data store. Credentials are stored in AWS Secrets Manager and injected into task definitions at runtime — never baked into images. Structured pino JSON logs flow to CloudWatch Log Groups (`/ecs/service-monitor/{web,worker,mock}`) where CloudWatch Logs Insights can query structured fields directly.
+**RDS PostgreSQL** (`db.t3.micro`, single-AZ, Postgres 16) serves as the shared data store. Environment variables — including `DATABASE_URL` — are set via Terraform `runtime_environment_variables`, not Secrets Manager. The database password is passed as a Terraform variable sourced from the `DB_PASSWORD` GitHub Secret.
 
-Separating web and worker provides blast-radius isolation: a poller crash doesn't affect the dashboard, and the web task can scale out during traffic spikes without spawning extra pollers.
+Structured pino JSON logs flow to CloudWatch via App Runner's built-in log streaming. Use CloudWatch Logs Insights to query structured fields directly.
+
+For full infrastructure details, CI/CD pipeline documentation, and deployment troubleshooting, see [docs/ci-cd.md](docs/ci-cd.md).
+
+---
+
+## Further Reading
+
+| Document | Description |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | C4 diagrams (system context + container), data flow narratives, design choices |
+| [docs/ci-cd.md](docs/ci-cd.md) | GitHub Actions workflows, Terraform operations, deployment pipeline, infrastructure module map |
+| [docs/runbook.md](docs/runbook.md) | Production operations: health checks, log queries, common issues, scaling, database maintenance, alert handling |
 
 ---
 

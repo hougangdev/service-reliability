@@ -1,6 +1,7 @@
 /**
- * Standalone entry point for the production ECS worker task.
- * Runs config sync + poll loop without any Next.js overhead.
+ * Standalone poller entry point — runs config sync + poll loop without Next.js overhead.
+ * Production-ready but not yet deployed via CI/CD (poller currently runs embedded
+ * in Next.js via instrumentation.ts). Available for future standalone deployment.
  * Usage: tsx src/worker.ts  (or compiled: node dist/worker.js)
  */
 import { startPoller } from "@/lib/monitoring";
