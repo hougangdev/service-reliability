@@ -123,6 +123,7 @@ export async function runPollCycle(deps: PollCycleDeps): Promise<PollCycleSummar
           lastError: result.error,
           lastAlertAt: lastAlertAt.get(svc.id) ?? null,
           rateLimitMs: 600_000,
+          pollIntervalMs: Number(process.env.POLL_INTERVAL_MS) || 30_000,
           fire: (payload) => {
             lastAlertAt.set(svc.id, Date.now());
             makeDefaultFire(alertWebhookUrl)(payload);
@@ -176,7 +177,7 @@ async function persistCheck(row: Omit<NewServiceCheck, "id">): Promise<void> {
 // startPoller — long-running loop, called from instrumentation + worker
 // ---------------------------------------------------------------------------
 
-export async function startPoller(): Promise<void> {
+export async function startPoller(): Promise<{ stop: () => void }> {
   const { db, services } = await import("@/lib/db");
   const { loadConfigFile } = await import("@/lib/config/loader");
   const { syncServicesFromConfig } = await import("@/lib/config/sync");
@@ -216,5 +217,9 @@ export async function startPoller(): Promise<void> {
 
   // Run immediately, then on interval
   await poll();
-  setInterval(poll, pollIntervalMs);
+  const intervalId = setInterval(poll, pollIntervalMs);
+
+  return {
+    stop: () => clearInterval(intervalId),
+  };
 }

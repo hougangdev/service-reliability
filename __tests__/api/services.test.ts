@@ -200,6 +200,15 @@ describe("GET /api/services/:id/history", () => {
     expect(queries.queryServiceHistory).toHaveBeenCalledWith("uuid-1", 500);
   });
 
+  it("clamps negative limit to 1", async () => {
+    vi.mocked(queries.queryServiceById).mockResolvedValueOnce(mockDetail);
+    vi.mocked(queries.queryServiceHistory).mockResolvedValueOnce({ checks: [], total: 0 });
+    await getHistory(makeRequest("uuid-1", -100), {
+      params: Promise.resolve({ id: "uuid-1" }),
+    });
+    expect(queries.queryServiceHistory).toHaveBeenCalledWith("uuid-1", 1);
+  });
+
   it("returns 404 when service is not found", async () => {
     vi.mocked(queries.queryServiceById).mockResolvedValueOnce(null);
     const res = await getHistory(makeRequest("missing"), {

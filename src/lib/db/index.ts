@@ -9,7 +9,14 @@ function getDb() {
   if (!connectionString) {
     throw new Error("DATABASE_URL environment variable is required");
   }
-  const pool = new Pool({ connectionString });
+  const pool = new Pool({
+    connectionString,
+    max: 20,
+    min: 2,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+    statement_timeout: 10_000,
+  });
   return drizzle(pool, { schema });
 }
 

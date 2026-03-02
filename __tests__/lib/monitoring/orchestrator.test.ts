@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { runPollCycle, PollCycleInProgressError } from "@/lib/monitoring";
+import { runPollCycle, PollCycleInProgressError, startPoller } from "@/lib/monitoring";
 import type { Service } from "@/lib/db/schema";
 
 // ---------------------------------------------------------------------------
@@ -228,5 +228,41 @@ describe("runPollCycle run lock", () => {
     await expect(
       runPollCycle({ services, checkFn, persistFn: okPersist })
     ).resolves.toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// startPoller — graceful shutdown
+// ---------------------------------------------------------------------------
+vi.mock("@/lib/db", () => ({
+  db: { select: vi.fn().mockReturnValue({ from: vi.fn().mockResolvedValue([]) }) },
+  services: "services-table",
+}));
+vi.mock("@/lib/config/loader", () => ({
+  loadConfigFile: vi.fn().mockResolvedValue({ services: [] }),
+}));
+vi.mock("@/lib/config/sync", () => ({
+  syncServicesFromConfig: vi.fn().mockResolvedValue({ created: 0, updated: 0, deactivated: 0 }),
+}));
+
+describe("startPoller", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns a stop function that clears the interval", async () => {
+    const { stop } = await startPoller();
+
+    expect(typeof stop).toBe("function");
+
+    // Advance time — no poll should fire after stop
+    const clearSpy = vi.spyOn(global, "clearInterval");
+    stop();
+    expect(clearSpy).toHaveBeenCalled();
+    clearSpy.mockRestore();
   });
 });

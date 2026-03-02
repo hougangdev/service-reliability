@@ -19,6 +19,7 @@ describe("evaluateAlert", () => {
       lastError: "503",
       lastAlertAt: null,
       rateLimitMs: 600_000,
+      pollIntervalMs: 30_000,
       fire,
     });
     expect(fire).not.toHaveBeenCalled();
@@ -33,6 +34,7 @@ describe("evaluateAlert", () => {
       lastError: "503",
       lastAlertAt: null,
       rateLimitMs: 600_000,
+      pollIntervalMs: 30_000,
       fire,
     });
     expect(fire).toHaveBeenCalledOnce();
@@ -47,6 +49,7 @@ describe("evaluateAlert", () => {
       lastError: "timeout",
       lastAlertAt: null,
       rateLimitMs: 600_000,
+      pollIntervalMs: 30_000,
       fire,
     });
     expect(fire).toHaveBeenCalledOnce();
@@ -63,6 +66,7 @@ describe("evaluateAlert", () => {
       lastError: "503",
       lastAlertAt: recentAlert,
       rateLimitMs: 600_000,
+      pollIntervalMs: 30_000,
       fire,
     });
     expect(fire).not.toHaveBeenCalled();
@@ -79,6 +83,7 @@ describe("evaluateAlert", () => {
       lastError: "503",
       lastAlertAt: oldAlert,
       rateLimitMs: 600_000,
+      pollIntervalMs: 30_000,
       fire,
     });
     expect(fire).toHaveBeenCalledOnce();
@@ -93,6 +98,7 @@ describe("evaluateAlert", () => {
       lastError: null,
       lastAlertAt: null,
       rateLimitMs: 600_000,
+      pollIntervalMs: 30_000,
       fire,
     });
     expect(fire).not.toHaveBeenCalled();
@@ -100,6 +106,7 @@ describe("evaluateAlert", () => {
 
   it("passes correct payload to fire callback", () => {
     const fire = vi.fn();
+    vi.setSystemTime(new Date("2025-06-15T12:00:00.000Z"));
     evaluateAlert({
       serviceName: "my-api",
       consecutiveFailures: 4,
@@ -107,6 +114,7 @@ describe("evaluateAlert", () => {
       lastError: "connection refused",
       lastAlertAt: null,
       rateLimitMs: 600_000,
+      pollIntervalMs: 30_000,
       fire,
     });
     expect(fire).toHaveBeenCalledWith(
@@ -116,5 +124,27 @@ describe("evaluateAlert", () => {
         lastError: "connection refused",
       })
     );
+  });
+
+  it("calculates since timestamp using pollIntervalMs", () => {
+    const fire = vi.fn();
+    vi.setSystemTime(new Date("2025-06-15T12:00:00.000Z"));
+    const now = Date.now();
+
+    evaluateAlert({
+      serviceName: "my-api",
+      consecutiveFailures: 3,
+      threshold: 3,
+      lastError: "timeout",
+      lastAlertAt: null,
+      rateLimitMs: 600_000,
+      pollIntervalMs: 60_000,
+      fire,
+    });
+
+    const payload = fire.mock.calls[0][0];
+    // since = now - 3 * 60_000 = now - 180_000
+    const expectedSince = new Date(now - 3 * 60_000).toISOString();
+    expect(payload.since).toBe(expectedSince);
   });
 });

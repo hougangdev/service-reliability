@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     }
 
     const rawLimit = Number(req.nextUrl.searchParams.get("limit") ?? DEFAULT_LIMIT);
-    const limit = Math.min(isNaN(rawLimit) ? DEFAULT_LIMIT : rawLimit, MAX_LIMIT);
+    const limit = Math.max(1, Math.min(isNaN(rawLimit) ? DEFAULT_LIMIT : rawLimit, MAX_LIMIT));
 
     const { checks, total } = await queryServiceHistory(id, limit);
 

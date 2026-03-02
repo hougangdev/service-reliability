@@ -257,16 +257,20 @@ describe("checkService retry behavior", () => {
     expect(result.statusCode).toBe(503);
   });
 
-  it("reports total wall-clock latency across both attempts", async () => {
-    // Both calls succeed but with delay — latencyMs should cover the full span
+  it("reports only the successful attempt's latency (excludes retry delay)", async () => {
+    // First attempt fails (503), second succeeds — latencyMs should reflect
+    // only the second request, not the retry delay in between
     mockFetch
       .mockResolvedValueOnce(makeResponse(503, "fail"))
       .mockResolvedValueOnce(makeResponse(200, "ok"));
 
+    // Use a noticeable retry delay so we can assert latency is below it
+    process.env.RETRY_DELAY_MS = "200";
     const result = await checkService(input);
 
-    // latencyMs should be >= 0 (with RETRY_DELAY_MS=1 it's very small)
-    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     expect(result.ok).toBe(true);
+    // The actual HTTP call is mocked (instant), so latencyMs should be
+    // well below the 200ms retry delay — proves we're not including it
+    expect(result.latencyMs).toBeLessThan(100);
   });
 });

@@ -121,13 +121,10 @@ async function singleCheck(input: CheckInput): Promise<CheckResult> {
  * DNS failures (ENOTFOUND) and TLS/certificate errors are NOT retried
  * because they indicate configuration issues that won't self-heal.
  *
- * `latencyMs` in the result reflects total wall-clock time across both
- * attempts (including the retry delay), so it accurately represents how
- * long this service was "being checked" from the poller's perspective.
+ * `latencyMs` reflects only the successful attempt's request time,
+ * excluding any retry delay, so dashboards show actual service latency.
  */
 export async function checkService(input: CheckInput): Promise<CheckResult> {
-  const outerStart = Date.now();
-
   const first = await singleCheck(input);
 
   if (first.ok || !isTransient(first)) {
@@ -137,8 +134,6 @@ export async function checkService(input: CheckInput): Promise<CheckResult> {
   // One retry after a short backoff
   const retryDelayMs = Number(process.env.RETRY_DELAY_MS) || 500;
   await delay(retryDelayMs);
-  const second = await singleCheck(input);
 
-  // Override latencyMs with total wall-clock time
-  return { ...second, latencyMs: Date.now() - outerStart };
+  return singleCheck(input);
 }

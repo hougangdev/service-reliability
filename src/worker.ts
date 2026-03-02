@@ -8,8 +8,16 @@ import { logger } from "@/lib/logger";
 
 async function main() {
   logger.info("Worker starting (standalone mode)");
-  await startPoller();
-  // startPoller runs setInterval — process stays alive
+  const { stop } = await startPoller();
+
+  const shutdown = () => {
+    logger.info("Received shutdown signal, stopping poller");
+    stop();
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 main().catch((err: unknown) => {

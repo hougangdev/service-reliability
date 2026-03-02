@@ -14,6 +14,7 @@ export type EvaluateAlertInput = {
   lastError: string | null;
   lastAlertAt: number | null;
   rateLimitMs: number;
+  pollIntervalMs: number;
   fire: (payload: AlertPayload) => void;
 };
 
@@ -29,6 +30,7 @@ export function evaluateAlert(input: EvaluateAlertInput): void {
     lastError,
     lastAlertAt,
     rateLimitMs,
+    pollIntervalMs,
     fire,
   } = input;
 
@@ -41,7 +43,7 @@ export function evaluateAlert(input: EvaluateAlertInput): void {
     service: serviceName,
     consecutiveFailures,
     lastError,
-    since: new Date(now - consecutiveFailures * 30_000).toISOString(),
+    since: new Date(now - consecutiveFailures * pollIntervalMs).toISOString(),
   });
 }
 
