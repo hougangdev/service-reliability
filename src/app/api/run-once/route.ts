@@ -8,7 +8,8 @@ import type { NewServiceCheck } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_req: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function POST(_req: NextRequest): Promise<Response> {
   try {
     const allServices = await db.select().from(services);
 
