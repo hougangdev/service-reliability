@@ -51,6 +51,8 @@ services:
       # Retention
       RETENTION_DAYS: 7
       MAX_CHECKS_PER_SERVICE: 500
+      # AI incident summary (reads from host .env)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     depends_on:
       db:
         condition: service_healthy

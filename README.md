@@ -289,15 +289,52 @@ For full infrastructure details, CI/CD pipeline documentation, and deployment tr
 
 ---
 
-## AI Usage
+## AI-Assisted Development
 
-This project was developed with AI assistance (Claude) for:
+This project uses [Claude Code](https://docs.anthropic.com/en/docs/claude-code) as a core development tool — not just for autocomplete, but as a structured collaborator that writes code, runs tests, and creates PRs. The workflow relies on guardrails (CLAUDE.md files and custom skills) that encode project conventions so the AI operates within well-defined boundaries.
 
-- Generating boilerplate structure and configuration files
-- Writing initial test scaffolding and implementation stubs
-- Debugging TypeScript/Drizzle type errors
-- Drafting documentation
+### CLAUDE.md as Project Guardrails
 
-All architectural decisions, code review, and final implementation choices were made by the developer. AI-generated code was reviewed and modified as needed before committing.
+Claude Code reads `CLAUDE.md` files at the start of every session, acting as a persistent project briefing. This project uses a two-tier configuration:
 
-During one session, Claude Code experienced a service shortage. Cursor was used as a temporary fallback for a portion of the development work.
+- **Global** (`~/.claude/CLAUDE.md`) — developer-specific preferences: commit style, plan mode behavior, educational explanations during implementation.
+- **Project** (`CLAUDE.md` at repo root) — repository-specific rules checked into version control: architecture context, codemap, stack details, conventions, environment variables, and accumulated lessons learned.
+
+The project-level file means any developer who clones the repo inherits the same guardrails — same conventional commit format, same testing approach (Vitest with globals), same architectural constraints (lazy DB proxy, dependency injection for testability). There's no "tribal knowledge" that only lives in someone's head.
+
+`CLAUDE.md` is version-controlled and evolves with the codebase. The "Lessons Learned" section grows as the team discovers gotchas (e.g., "only retry transient errors", "run lock prevents HTTP storms"), so the AI doesn't repeat past mistakes.
+
+### Plan Mode
+
+Before non-trivial work, the workflow starts with `/plan` mode:
+
+1. The AI explores the codebase — reads relevant files, searches for patterns, understands existing architecture.
+2. It asks clarifying questions about constraints, tradeoffs, edge cases, and UX concerns (enforced by a global CLAUDE.md rule that requires an interview step before finalizing any plan).
+3. It produces a written implementation plan with specific files, changes, and verification steps.
+4. The developer reviews and approves (or revises) before any code is written.
+
+This prevents the AI from charging ahead with the wrong approach on ambiguous tasks, surfaces architectural tradeoffs early, and creates a paper trail of design decisions.
+
+### Custom Skills
+
+Skills are reusable workflow definitions invoked via `/skill-name` that encode multi-step processes:
+
+| Skill | Purpose |
+|---|---|
+| `/tdd-workflow` | Enforces test-driven development: write failing tests first, implement to pass, target 80%+ coverage |
+| `/preflight` | Pre-push pipeline: lint → type-check → build (fail-fast), then auto-generates a conventional commit message |
+| `/pr` | Gathers branch context, detects linked GitHub issues, creates a PR with a structured summary and test plan |
+| `/coding-standards` | Applies project-wide TypeScript/React best practices during implementation |
+
+Skills make the AI workflow repeatable and consistent. A new developer can run `/preflight` without knowing the team's commit conventions or `/tdd-workflow` without memorizing the testing patterns — the skill encodes the process.
+
+### Multi-Agent Teams
+
+For complex features that span multiple domains (e.g., backend API + frontend components + infrastructure changes), Claude Code can spawn specialist agents that work in parallel on a shared task list. Each agent gets a scoped role and constraints — one handles database queries, another builds React components, a third writes tests — while a team lead agent coordinates task assignment and integration. This parallelizes independent work streams while keeping each agent focused on its domain.
+
+### Motivations
+
+- **Reproducibility over heroics** — CLAUDE.md + skills ensure any developer (or AI session) produces consistent output regardless of who's driving.
+- **Plan before you build** — plan mode forces alignment on approach before code is written, reducing throwaway work.
+- **Guardrails, not gatekeeping** — the goal isn't to limit the AI but to encode what "good" looks like for this project so it can move fast within safe boundaries.
+- **The codebase teaches itself** — the CLAUDE.md codemap, architecture notes, and lessons learned mean the AI doesn't start from zero each session.
