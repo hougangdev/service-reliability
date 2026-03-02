@@ -189,19 +189,18 @@ service-reliability/
 │   ├── app/                    # Next.js App Router (pages + API routes)
 │   ├── components/             # React components (UI + domain)
 │   ├── lib/
+│   │   ├── config/             # YAML loader, schema validation, DB sync
 │   │   ├── db/                 # Drizzle schema, migrations, client
-│   │   ├── poller/             # HTTP checker, version extractor, alerting, orchestrator
-│   │   ├── config/             # YAML loader + DB sync
-│   │   ├── retention.ts        # Age + count-based data cleanup
-│   │   ├── logger.ts           # pino (JSON in prod, pretty in dev)
-│   │   └── worker.ts           # Standalone poller entry (ECS worker task)
+│   │   ├── monitoring/         # HTTP checker, version extractor, alerting, retention, orchestrator
+│   │   ├── services/           # Service query helpers + response types
+│   │   └── logger.ts           # pino (JSON in prod, pretty in dev)
+│   ├── worker.ts               # Standalone poller entry (ECS worker task)
 │   └── instrumentation.ts      # Next.js hook → starts poller in dev
 ├── __tests__/                  # Vitest tests mirroring src structure
 ├── mock-services/              # Express mock server (demo endpoints)
 ├── scripts/
 │   ├── migrate.mjs             # Runtime migration runner (used by Docker startup)
 │   └── start.sh                # Docker entrypoint: migrate → start Next.js
-├── terraform/                  # AWS infrastructure (Phase 8)
 ├── services.yaml               # Service monitor config (source of truth)
 ├── docker-compose.yml          # Local: Postgres + mock-services + app
 ├── Dockerfile                  # Multi-stage: runner + worker targets
@@ -253,11 +252,6 @@ The production deployment uses three separate ECS Fargate tasks behind a single 
 RDS PostgreSQL (`db.t3.micro`, single-AZ) serves as the shared data store. Credentials are stored in AWS Secrets Manager and injected into task definitions at runtime — never baked into images. Structured pino JSON logs flow to CloudWatch Log Groups (`/ecs/service-monitor/{web,worker,mock}`) where CloudWatch Logs Insights can query structured fields directly.
 
 Separating web and worker provides blast-radius isolation: a poller crash doesn't affect the dashboard, and the web task can scale out during traffic spikes without spawning extra pollers.
-
-```bash
-# Deploy (Phase 8)
-cd terraform && terraform init && terraform apply
-```
 
 ---
 
