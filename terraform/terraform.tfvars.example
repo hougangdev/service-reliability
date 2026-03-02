@@ -1,0 +1,5 @@
+aws_region            = "ap-southeast-1"
+project_name          = "service-monitor"
+db_password           = "CHANGE_ME"
+ecr_web_url           = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/service-monitor/web"
+ecr_mock_services_url = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/service-monitor/mock-services"

@@ -57,6 +57,14 @@ terraform/terraform.tfstate.backup
 terraform/*.tfvars
 !terraform/*.tfvars.example
 
+# Terraform bootstrap (local state)
+terraform/bootstrap/.terraform/
+terraform/bootstrap/.terraform.lock.hcl
+terraform/bootstrap/terraform.tfstate
+terraform/bootstrap/terraform.tfstate.backup
+terraform/bootstrap/*.tfvars
+!terraform/bootstrap/*.tfvars.example
+
 # Misc
 *.pem
 .vercel

@@ -1,0 +1,85 @@
+name: CI + Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "terraform/**"
+      - "**.md"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run test:run
+      - run: npm run build
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push mock-services image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --platform linux/amd64 \
+                        -t $ECR_REGISTRY/service-monitor/mock-services:$IMAGE_TAG \
+                        -t $ECR_REGISTRY/service-monitor/mock-services:latest \
+                        ./mock-services
+          docker push $ECR_REGISTRY/service-monitor/mock-services:$IMAGE_TAG
+          docker push $ECR_REGISTRY/service-monitor/mock-services:latest
+
+      - name: Read mock-services URL from SSM
+        id: ssm
+        run: |
+          MOCK_URL=$(aws ssm get-parameter \
+            --name "/service-monitor/mock-services-url" \
+            --query "Parameter.Value" \
+            --output text)
+          echo "mock_url=$MOCK_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Generate production services.yaml
+        run: |
+          sed 's|http://mock-services:3001|${{ steps.ssm.outputs.mock_url }}|g' \
+            services.yaml > services.yaml.tmp
+          mv services.yaml.tmp services.yaml
+
+      - name: Build and push web image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --platform linux/amd64 \
+                        -t $ECR_REGISTRY/service-monitor/web:$IMAGE_TAG \
+                        -t $ECR_REGISTRY/service-monitor/web:latest \
+                        --target runner \
+                        .
+          docker push $ECR_REGISTRY/service-monitor/web:$IMAGE_TAG
+          docker push $ECR_REGISTRY/service-monitor/web:latest
