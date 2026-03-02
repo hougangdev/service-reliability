@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { queryServiceById, queryServiceHistory } from "@/lib/api/queries";
+import { queryServiceById, queryServiceHistory } from "@/lib/services/queries";
 import { ServiceDetailView } from "@/components/service-detail";
 import { Header } from "@/components/header";
 

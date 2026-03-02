@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { checkService } from "@/lib/poller/checker";
+import { checkService } from "@/lib/monitoring/checker";
 
 // We mock globalThis.fetch for all tests
 const mockFetch = vi.fn();

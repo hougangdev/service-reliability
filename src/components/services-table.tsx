@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { ServiceSummary } from "@/lib/api/types";
+import type { ServiceSummary } from "@/lib/services/types";
 
 const REFETCH_INTERVAL = 15_000;
 

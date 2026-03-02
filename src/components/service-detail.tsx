@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { ServiceDetail, HistoryResponse } from "@/lib/api/types";
+import type { ServiceDetail, HistoryResponse } from "@/lib/services/types";
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

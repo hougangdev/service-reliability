@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/api/queries", () => ({
+vi.mock("@/lib/services/queries", () => ({
   queryLastRunAt: vi.fn(),
 }));
 
-vi.mock("@/lib/poller", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/poller")>();
+vi.mock("@/lib/monitoring", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/monitoring")>();
   return {
     ...actual,
     runPollCycle: vi.fn(),
@@ -18,11 +18,11 @@ vi.mock("@/lib/db", () => ({
   services: {},
 }));
 
-import * as queries from "@/lib/api/queries";
+import * as queries from "@/lib/services/queries";
 import { GET as getHealth } from "@/app/api/monitor/health/route";
 import { POST as postRunOnce } from "@/app/api/run-once/route";
-import * as poller from "@/lib/poller";
-import { PollCycleInProgressError } from "@/lib/poller";
+import * as poller from "@/lib/monitoring";
+import { PollCycleInProgressError } from "@/lib/monitoring";
 
 // ---------------------------------------------------------------------------
 // GET /api/monitor/health

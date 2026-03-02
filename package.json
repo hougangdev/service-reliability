@@ -11,7 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "worker": "tsx src/lib/worker.ts",
+    "worker": "tsx src/worker.ts",
     "test": "vitest",
     "test:run": "vitest run"
   },

@@ -1,4 +1,4 @@
-import { queryAllServices } from "@/lib/api/queries";
+import { queryAllServices } from "@/lib/services/queries";
 import { ServicesTable } from "@/components/services-table";
 import { Header } from "@/components/header";
 

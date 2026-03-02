@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { queryAllServices } from "@/lib/api/queries";
-import type { ApiError } from "@/lib/api/types";
+import { queryAllServices } from "@/lib/services/queries";
+import type { ApiError } from "@/lib/services/types";
 
 export const dynamic = "force-dynamic";
 

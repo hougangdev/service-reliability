@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { queryLastRunAt } from "@/lib/api/queries";
-import type { ApiError, HealthResponse } from "@/lib/api/types";
+import { queryLastRunAt } from "@/lib/services/queries";
+import type { ApiError, HealthResponse } from "@/lib/services/types";
 
 export const dynamic = "force-dynamic";
 

@@ -200,7 +200,7 @@ export async function startPoller(): Promise<void> {
       logger.info(summary, "Poll cycle complete");
 
       // Run retention after each successful cycle (best-effort, outside lock)
-      const { runRetentionFromDb } = await import("@/lib/retention");
+      const { runRetentionFromDb } = await import("./retention");
       await runRetentionFromDb({
         retentionDays: Number(process.env.RETENTION_DAYS) || 7,
         maxPerService: Number(process.env.MAX_CHECKS_PER_SERVICE) || 500,

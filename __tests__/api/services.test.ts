@@ -4,13 +4,13 @@ import { NextRequest } from "next/server";
 // ---------------------------------------------------------------------------
 // Mock the query layer — no DB connection needed
 // ---------------------------------------------------------------------------
-vi.mock("@/lib/api/queries", () => ({
+vi.mock("@/lib/services/queries", () => ({
   queryAllServices: vi.fn(),
   queryServiceById: vi.fn(),
   queryServiceHistory: vi.fn(),
 }));
 
-import * as queries from "@/lib/api/queries";
+import * as queries from "@/lib/services/queries";
 import { GET as getServices } from "@/app/api/services/route";
 import { GET as getServiceById } from "@/app/api/services/[id]/route";
 import { GET as getHistory } from "@/app/api/services/[id]/history/route";

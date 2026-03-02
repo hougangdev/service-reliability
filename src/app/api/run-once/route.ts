@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { runPollCycle, PollCycleInProgressError } from "@/lib/poller";
+import { runPollCycle, PollCycleInProgressError } from "@/lib/monitoring";
 import { db, services } from "@/lib/db";
-import { checkService } from "@/lib/poller/checker";
+import { checkService } from "@/lib/monitoring/checker";
 import { serviceChecks } from "@/lib/db/schema";
-import type { ApiError, RunOnceResponse } from "@/lib/api/types";
+import type { ApiError, RunOnceResponse } from "@/lib/services/types";
 import type { NewServiceCheck } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { runPollCycle, PollCycleInProgressError } from "@/lib/poller";
+import { runPollCycle, PollCycleInProgressError } from "@/lib/monitoring";
 import type { Service } from "@/lib/db/schema";
 
 // ---------------------------------------------------------------------------

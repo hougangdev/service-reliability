@@ -70,4 +70,4 @@ COPY src/ ./src/
 COPY services.yaml ./
 
 USER nextjs
-CMD ["node_modules/.bin/tsx", "src/lib/worker.ts"]
+CMD ["node_modules/.bin/tsx", "src/worker.ts"]

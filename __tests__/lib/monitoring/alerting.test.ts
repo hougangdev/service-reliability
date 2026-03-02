@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { evaluateAlert } from "@/lib/poller/alerting";
+import { evaluateAlert } from "@/lib/monitoring/alerting";
 
 describe("evaluateAlert", () => {
   beforeEach(() => {

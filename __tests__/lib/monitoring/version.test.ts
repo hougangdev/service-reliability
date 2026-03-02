@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractVersion } from "@/lib/poller/version";
+import { extractVersion } from "@/lib/monitoring/version";
 
 function makeHeaders(map: Record<string, string>): Pick<Headers, "get"> {
   return { get: (k: string) => map[k.toLowerCase()] ?? null };
