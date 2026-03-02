@@ -4,6 +4,14 @@ A lightweight, self-hosted service reliability monitor. Periodically polls HTTP 
 
 **Stack:** TypeScript · Next.js 15 (App Router) · Tailwind CSS · shadcn/ui · Drizzle ORM · PostgreSQL · Docker · AWS (App Runner + RDS)
 
+### Dashboard
+
+![Dashboard — services table with status, latency sparklines, version drift, and AI incident summary](docs/dashboard.png)
+
+### Service Detail
+
+![Service detail — latency trend, status timeline, configuration, and check history](docs/service-detail.png)
+
 ---
 
 ## Quickstart
@@ -20,6 +28,32 @@ docker compose up --build
 ```
 
 The `app` container automatically applies database migrations on startup before booting the Next.js server.
+
+### Adding services to monitor
+
+Edit `services.yaml` to add your own endpoints. The poller reads this file on startup and syncs it to the database — new entries are inserted, removed entries are soft-deleted (history preserved).
+
+```yaml
+services:
+  # Minimal — just a name and URL
+  - name: my-api
+    url: https://api.example.com/health
+    env: production
+
+  # With version drift detection
+  - name: auth-service
+    url: https://auth.example.com/health
+    env: production
+    expected_version: "3.0.0"
+    version_path: "$.version"        # extract from JSON response body
+
+  # Version from response header instead
+  - name: legacy-service
+    url: https://legacy.example.com/ping
+    version_header: X-App-Version    # extract from HTTP header
+```
+
+After editing, restart the poller (`docker compose restart app` or restart `npm run dev`) to pick up changes.
 
 ### Run without Docker (local dev)
 
