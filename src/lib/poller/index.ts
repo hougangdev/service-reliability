@@ -37,116 +37,130 @@ const lastAlertAt = new Map<string, number>();
 // ---------------------------------------------------------------------------
 let running = false;
 
+export class PollCycleInProgressError extends Error {
+  constructor() {
+    super("Poll cycle already in progress");
+    this.name = "PollCycleInProgressError";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Core cycle (injectable deps for unit tests)
 // ---------------------------------------------------------------------------
 
 export async function runPollCycle(deps: PollCycleDeps): Promise<PollCycleSummary> {
-  const {
-    services,
-    checkFn = checkService,
-    persistFn,
-    concurrencyLimit = 10,
-    timeoutMs = Number(process.env.CHECK_TIMEOUT_MS) || 3000,
-  } = deps;
+  if (running) throw new PollCycleInProgressError();
+  running = true;
 
-  const runId = randomUUID();
-  const limit = pLimit(concurrencyLimit);
-  const activeServices = services.filter((s) => s.isActive);
-  const start = Date.now();
+  try {
+    const {
+      services,
+      checkFn = checkService,
+      persistFn,
+      concurrencyLimit = 10,
+      timeoutMs = Number(process.env.CHECK_TIMEOUT_MS) || 3000,
+    } = deps;
 
-  let succeeded = 0;
-  let failed = 0;
+    const runId = randomUUID();
+    const limit = pLimit(concurrencyLimit);
+    const activeServices = services.filter((s) => s.isActive);
+    const start = Date.now();
 
-  const tasks = activeServices.map((svc) =>
-    limit(async () => {
-      let result: CheckResult;
+    let succeeded = 0;
+    let failed = 0;
 
-      try {
-        result = await checkFn({ serviceId: svc.id, url: svc.url, timeoutMs });
-      } catch (err) {
-        result = {
-          ok: false,
-          statusCode: null,
-          latencyMs: 0,
-          error: err instanceof Error ? err.message : String(err),
-          responseText: null,
-          responseHeaders: null,
-        };
-      }
+    const tasks = activeServices.map((svc) =>
+      limit(async () => {
+        let result: CheckResult;
 
-      const observedVersion = result.ok
-        ? extractVersion({
-            responseText: result.responseText,
-            versionPath: svc.versionPath,
-            versionHeader: svc.versionHeader,
-            headers: result.responseHeaders,
-          })
-        : null;
+        try {
+          result = await checkFn({ serviceId: svc.id, url: svc.url, timeoutMs });
+        } catch (err) {
+          result = {
+            ok: false,
+            statusCode: null,
+            latencyMs: 0,
+            error: err instanceof Error ? err.message : String(err),
+            responseText: null,
+            responseHeaders: null,
+          };
+        }
 
-      const row: Omit<NewServiceCheck, "id"> = {
-        serviceId: svc.id,
-        ok: result.ok,
-        statusCode: result.statusCode,
-        latencyMs: result.latencyMs,
-        observedVersion,
-        error: result.error,
-        runId,
-        checkedAt: new Date(),
-      };
+        const observedVersion = result.ok
+          ? extractVersion({
+              responseText: result.responseText,
+              versionPath: svc.versionPath,
+              versionHeader: svc.versionHeader,
+              headers: result.responseHeaders,
+            })
+          : null;
 
-      if (result.ok) {
-        succeeded++;
-        consecutiveFailures.set(svc.id, 0);
-      } else {
-        failed++;
-        const prev = consecutiveFailures.get(svc.id) ?? 0;
-        consecutiveFailures.set(svc.id, prev + 1);
-      }
-
-      const threshold = Number(process.env.ALERT_THRESHOLD) || 3;
-      evaluateAlert({
-        serviceName: svc.name,
-        consecutiveFailures: consecutiveFailures.get(svc.id) ?? 0,
-        threshold,
-        lastError: result.error,
-        lastAlertAt: lastAlertAt.get(svc.id) ?? null,
-        rateLimitMs: 600_000,
-        fire: (payload) => {
-          lastAlertAt.set(svc.id, Date.now());
-          makeDefaultFire(process.env.ALERT_WEBHOOK_URL)(payload);
-        },
-      });
-
-      logger.info(
-        {
-          run_id: runId,
-          service: svc.name,
-          env: svc.env,
+        const row: Omit<NewServiceCheck, "id"> = {
+          serviceId: svc.id,
           ok: result.ok,
-          status_code: result.statusCode,
-          latency_ms: result.latencyMs,
-          observed_version: observedVersion,
+          statusCode: result.statusCode,
+          latencyMs: result.latencyMs,
+          observedVersion,
           error: result.error,
-        },
-        `check ${result.ok ? "ok" : "failed"}: ${svc.name}`
-      );
+          runId,
+          checkedAt: new Date(),
+        };
 
-      if (persistFn) {
-        await persistFn(row);
-      }
-    })
-  );
+        if (result.ok) {
+          succeeded++;
+          consecutiveFailures.set(svc.id, 0);
+        } else {
+          failed++;
+          const prev = consecutiveFailures.get(svc.id) ?? 0;
+          consecutiveFailures.set(svc.id, prev + 1);
+        }
 
-  await Promise.all(tasks);
+        const threshold = Number(process.env.ALERT_THRESHOLD) || 3;
+        evaluateAlert({
+          serviceName: svc.name,
+          consecutiveFailures: consecutiveFailures.get(svc.id) ?? 0,
+          threshold,
+          lastError: result.error,
+          lastAlertAt: lastAlertAt.get(svc.id) ?? null,
+          rateLimitMs: 600_000,
+          fire: (payload) => {
+            lastAlertAt.set(svc.id, Date.now());
+            makeDefaultFire(process.env.ALERT_WEBHOOK_URL)(payload);
+          },
+        });
 
-  return {
-    runId,
-    total: activeServices.length,
-    succeeded,
-    failed,
-    durationMs: Date.now() - start,
-  };
+        logger.info(
+          {
+            run_id: runId,
+            service: svc.name,
+            env: svc.env,
+            ok: result.ok,
+            status_code: result.statusCode,
+            latency_ms: result.latencyMs,
+            observed_version: observedVersion,
+            error: result.error,
+          },
+          `check ${result.ok ? "ok" : "failed"}: ${svc.name}`
+        );
+
+        if (persistFn) {
+          await persistFn(row);
+        }
+      })
+    );
+
+    await Promise.all(tasks);
+
+    return {
+      runId,
+      total: activeServices.length,
+      succeeded,
+      failed,
+      durationMs: Date.now() - start,
+    };
+  } finally {
+    running = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -177,12 +191,6 @@ export async function startPoller(): Promise<void> {
   logger.info(syncResult, "Service sync complete");
 
   const poll = async () => {
-    if (running) {
-      logger.warn("Poll cycle still running — skipping this tick");
-      return;
-    }
-
-    running = true;
     try {
       const allServices = await db.select().from(services);
       const summary = await runPollCycle({
@@ -191,16 +199,18 @@ export async function startPoller(): Promise<void> {
       });
       logger.info(summary, "Poll cycle complete");
 
-      // Run retention after each successful cycle (best-effort)
+      // Run retention after each successful cycle (best-effort, outside lock)
       const { runRetentionFromDb } = await import("@/lib/retention");
       await runRetentionFromDb({
         retentionDays: Number(process.env.RETENTION_DAYS) || 7,
         maxPerService: Number(process.env.MAX_CHECKS_PER_SERVICE) || 500,
       });
     } catch (err) {
-      logger.error({ err }, "Poll cycle error");
-    } finally {
-      running = false;
+      if (err instanceof PollCycleInProgressError) {
+        logger.warn("Poll cycle still running — skipping this tick");
+      } else {
+        logger.error({ err }, "Poll cycle error");
+      }
     }
   };
 

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { runPollCycle } from "@/lib/poller";
+import { runPollCycle, PollCycleInProgressError } from "@/lib/poller";
 import { db, services } from "@/lib/db";
 import { checkService } from "@/lib/poller/checker";
 import { serviceChecks } from "@/lib/db/schema";
@@ -24,6 +24,10 @@ export async function POST(_req: NextRequest): Promise<Response> {
     const body: RunOnceResponse = summary;
     return NextResponse.json(body);
   } catch (err) {
+    if (err instanceof PollCycleInProgressError) {
+      const error: ApiError = { error: err.message };
+      return NextResponse.json(error, { status: 409 });
+    }
     const error: ApiError = { error: err instanceof Error ? err.message : "Internal server error" };
     return NextResponse.json(error, { status: 500 });
   }

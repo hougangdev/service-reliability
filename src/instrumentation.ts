@@ -7,8 +7,9 @@ export async function register() {
   // Only run in the Node.js runtime (not Edge), and only server-side
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { startPoller } = await import("@/lib/poller");
+    const { logger } = await import("@/lib/logger");
     startPoller().catch((err: unknown) => {
-      console.error("[instrumentation] poller failed to start", err);
+      logger.error({ err }, "Poller failed to start");
     });
   }
 }

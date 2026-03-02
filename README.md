@@ -129,6 +129,7 @@ services:
 | `CHECK_TIMEOUT_MS`        | `3000`                     | Per-request HTTP timeout              |
 | `CONCURRENCY_LIMIT`       | `10`                       | Max concurrent checks per cycle       |
 | `ALERT_THRESHOLD`         | `3`                        | Consecutive failures before alerting  |
+| `RETRY_DELAY_MS`          | `500`                      | Delay before single transient retry   |
 | `ALERT_WEBHOOK_URL`       | *(empty)*                  | Webhook for Slack/Discord/PagerDuty   |
 | `RETENTION_DAYS`          | `7`                        | Delete checks older than N days       |
 | `MAX_CHECKS_PER_SERVICE`  | `500`                      | Cap stored checks per service         |
@@ -270,3 +271,5 @@ This project was developed with AI assistance (Claude) for:
 - Drafting documentation
 
 All architectural decisions, code review, and final implementation choices were made by the developer. AI-generated code was reviewed and modified as needed before committing.
+
+During one session, Claude Code experienced a service shortage. Cursor was used as a temporary fallback for a portion of the development work.

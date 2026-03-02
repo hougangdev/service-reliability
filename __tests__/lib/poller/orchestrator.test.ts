@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { runPollCycle } from "@/lib/poller";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { runPollCycle, PollCycleInProgressError } from "@/lib/poller";
 import type { Service } from "@/lib/db/schema";
 
 // ---------------------------------------------------------------------------
@@ -130,6 +130,30 @@ describe("runPollCycle", () => {
     );
   });
 
+  it("defaults to CHECK_TIMEOUT_MS=3000 when not specified", async () => {
+    // Ensure env var is not set so we exercise the fallback
+    const prev = process.env.CHECK_TIMEOUT_MS;
+    delete process.env.CHECK_TIMEOUT_MS;
+
+    const checkFn = vi.fn().mockResolvedValue({
+      ok: true, statusCode: 200, latencyMs: 10,
+      responseText: null, responseHeaders: null, error: null,
+    });
+
+    await runPollCycle({
+      services: [makeService()],
+      checkFn,
+      persistFn: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(checkFn).toHaveBeenCalledWith(
+      expect.objectContaining({ timeoutMs: 3000 })
+    );
+
+    // Restore
+    if (prev !== undefined) process.env.CHECK_TIMEOUT_MS = prev;
+  });
+
   it("returns a summary with per-service outcomes", async () => {
     const checkFn = vi.fn()
       .mockResolvedValueOnce({ ok: true, statusCode: 200, latencyMs: 10, responseText: null, responseHeaders: null, error: null })
@@ -142,5 +166,67 @@ describe("runPollCycle", () => {
     expect(summary.total).toBe(2);
     expect(summary.succeeded).toBe(1);
     expect(summary.failed).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Run lock
+// ---------------------------------------------------------------------------
+describe("runPollCycle run lock", () => {
+  it("throws PollCycleInProgressError when called while already running", async () => {
+    // Use a checkFn that hangs until we resolve it manually
+    let resolveCheck!: () => void;
+    const slowCheckFn = vi.fn().mockImplementation(
+      () => new Promise<ReturnType<typeof slowCheckFn>>((resolve) => {
+        resolveCheck = () => resolve({
+          ok: true, statusCode: 200, latencyMs: 10,
+          responseText: null, responseHeaders: null, error: null,
+        });
+      })
+    );
+
+    const services = [makeService()];
+    const first = runPollCycle({ services, checkFn: slowCheckFn });
+
+    // Second call should throw while first is still in progress
+    await expect(
+      runPollCycle({ services, checkFn: slowCheckFn })
+    ).rejects.toThrow(PollCycleInProgressError);
+
+    // Clean up: resolve the hanging check so first call completes
+    resolveCheck();
+    await first;
+  });
+
+  it("releases lock after successful completion (sequential calls succeed)", async () => {
+    const checkFn = vi.fn().mockResolvedValue({
+      ok: true, statusCode: 200, latencyMs: 10,
+      responseText: null, responseHeaders: null, error: null,
+    });
+    const services = [makeService()];
+
+    await runPollCycle({ services, checkFn });
+    // Second call should succeed — lock was released
+    await expect(runPollCycle({ services, checkFn })).resolves.toBeDefined();
+  });
+
+  it("releases lock after error (persistFn throws, next call succeeds)", async () => {
+    const checkFn = vi.fn().mockResolvedValue({
+      ok: true, statusCode: 200, latencyMs: 10,
+      responseText: null, responseHeaders: null, error: null,
+    });
+    const failingPersist = vi.fn().mockRejectedValue(new Error("db write failed"));
+    const services = [makeService()];
+
+    // First call should throw because persistFn fails
+    await expect(
+      runPollCycle({ services, checkFn, persistFn: failingPersist })
+    ).rejects.toThrow("db write failed");
+
+    // Lock should be released — next call with working persist succeeds
+    const okPersist = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      runPollCycle({ services, checkFn, persistFn: okPersist })
+    ).resolves.toBeDefined();
   });
 });

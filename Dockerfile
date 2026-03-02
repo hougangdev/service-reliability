@@ -28,12 +28,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Next.js standalone output
+# Production deps for migration script (drizzle-orm, pg)
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev && rm -rf /root/.npm
+
+# Next.js standalone output (overlays on top of node_modules)
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Migration script + SQL migration files (drizzle migrator runs at startup)
+# Service config + migration script + SQL migration files
+COPY --chown=nextjs:nodejs services.yaml ./services.yaml
 COPY --chown=nextjs:nodejs scripts/migrate.mjs ./scripts/migrate.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/src/lib/db/migrations ./migrations
 
