@@ -1,0 +1,33 @@
+# Service Reliability Monitor — service definitions
+# URLs point at the mock server when running via docker-compose (hostname: mock-services)
+# For local dev without Docker, use http://localhost:3001
+
+services:
+  - name: healthy-api
+    url: http://mock-services:3001/api/healthy
+    env: default
+    expected_version: "2.1.0"
+    version_path: "$.version"
+
+  - name: degraded-api
+    url: http://mock-services:3001/api/degraded
+    env: default
+    expected_version: "2.1.0"
+    version_path: "$.version"
+
+  - name: wrong-version-api
+    url: http://mock-services:3001/api/wrong-version
+    env: default
+    expected_version: "2.1.0"
+    version_path: "$.version"
+
+  - name: failing-api
+    url: http://mock-services:3001/api/failing
+    env: default
+    expected_version: "2.1.0"
+    version_path: "$.version"
+
+  - name: timeout-api
+    url: http://mock-services:3001/api/timeout
+    env: default
+    # No expected_version — used to test timeout handling
