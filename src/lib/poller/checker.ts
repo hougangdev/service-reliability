@@ -126,7 +126,6 @@ async function singleCheck(input: CheckInput): Promise<CheckResult> {
  * long this service was "being checked" from the poller's perspective.
  */
 export async function checkService(input: CheckInput): Promise<CheckResult> {
-  const retryDelayMs = Number(process.env.RETRY_DELAY_MS) || 500;
   const outerStart = Date.now();
 
   const first = await singleCheck(input);
@@ -136,6 +135,7 @@ export async function checkService(input: CheckInput): Promise<CheckResult> {
   }
 
   // One retry after a short backoff
+  const retryDelayMs = Number(process.env.RETRY_DELAY_MS) || 500;
   await delay(retryDelayMs);
   const second = await singleCheck(input);
 

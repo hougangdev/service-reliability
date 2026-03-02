@@ -65,6 +65,8 @@ export async function runPollCycle(deps: PollCycleDeps): Promise<PollCycleSummar
     const limit = pLimit(concurrencyLimit);
     const activeServices = services.filter((s) => s.isActive);
     const start = Date.now();
+    const alertThreshold = Number(process.env.ALERT_THRESHOLD) || 3;
+    const alertWebhookUrl = process.env.ALERT_WEBHOOK_URL;
 
     let succeeded = 0;
     let failed = 0;
@@ -106,26 +108,24 @@ export async function runPollCycle(deps: PollCycleDeps): Promise<PollCycleSummar
           checkedAt: new Date(),
         };
 
+        const failCount = result.ok ? 0 : (consecutiveFailures.get(svc.id) ?? 0) + 1;
         if (result.ok) {
           succeeded++;
-          consecutiveFailures.set(svc.id, 0);
         } else {
           failed++;
-          const prev = consecutiveFailures.get(svc.id) ?? 0;
-          consecutiveFailures.set(svc.id, prev + 1);
         }
+        consecutiveFailures.set(svc.id, failCount);
 
-        const threshold = Number(process.env.ALERT_THRESHOLD) || 3;
         evaluateAlert({
           serviceName: svc.name,
-          consecutiveFailures: consecutiveFailures.get(svc.id) ?? 0,
-          threshold,
+          consecutiveFailures: failCount,
+          threshold: alertThreshold,
           lastError: result.error,
           lastAlertAt: lastAlertAt.get(svc.id) ?? null,
           rateLimitMs: 600_000,
           fire: (payload) => {
             lastAlertAt.set(svc.id, Date.now());
-            makeDefaultFire(process.env.ALERT_WEBHOOK_URL)(payload);
+            makeDefaultFire(alertWebhookUrl)(payload);
           },
         });
 

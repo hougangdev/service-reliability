@@ -5,13 +5,11 @@ vi.mock("@/lib/api/queries", () => ({
   queryLastRunAt: vi.fn(),
 }));
 
-vi.mock("@/lib/poller", () => {
-  class PollCycleInProgressError extends Error {
-    constructor() { super("Poll cycle already in progress"); this.name = "PollCycleInProgressError"; }
-  }
+vi.mock("@/lib/poller", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/poller")>();
   return {
+    ...actual,
     runPollCycle: vi.fn(),
-    PollCycleInProgressError,
   };
 });
 

@@ -12,8 +12,9 @@ export async function GET() {
     const staleThresholdMs = pollIntervalMs * 3;
 
     // null lastRunAt = fresh deployment, awaiting first poll — not stale
-    if (lastRunAt && Date.now() - lastRunAt.getTime() > staleThresholdMs) {
-      const ageSeconds = Math.round((Date.now() - lastRunAt.getTime()) / 1000);
+    const ageMs = lastRunAt ? Date.now() - lastRunAt.getTime() : 0;
+    if (lastRunAt && ageMs > staleThresholdMs) {
+      const ageSeconds = Math.round(ageMs / 1000);
       const thresholdSeconds = Math.round(staleThresholdMs / 1000);
       const body: HealthResponse = {
         ok: false,
