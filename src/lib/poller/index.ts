@@ -190,6 +190,13 @@ export async function startPoller(): Promise<void> {
         persistFn: persistCheck,
       });
       logger.info(summary, "Poll cycle complete");
+
+      // Run retention after each successful cycle (best-effort)
+      const { runRetentionFromDb } = await import("@/lib/retention");
+      await runRetentionFromDb({
+        retentionDays: Number(process.env.RETENTION_DAYS) || 7,
+        maxPerService: Number(process.env.MAX_CHECKS_PER_SERVICE) || 500,
+      });
     } catch (err) {
       logger.error({ err }, "Poll cycle error");
     } finally {
