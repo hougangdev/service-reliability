@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseConfig } from "@/lib/config/loader";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { parseConfig, interpolateEnvVars } from "@/lib/config/loader";
 
 const validYaml = `
 services:
@@ -105,5 +105,43 @@ services:
     url: http://localhost:3001/api/other
 `;
     expect(() => parseConfig(yaml)).toThrow(/duplicate/i);
+  });
+});
+
+describe("interpolateEnvVars", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    vi.stubEnv("MOCK_SERVICES_URL", "https://mock.example.com");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("replaces ${VAR} with env var value", () => {
+    const input = "url: ${MOCK_SERVICES_URL}/api/healthy";
+    expect(interpolateEnvVars(input)).toBe("url: https://mock.example.com/api/healthy");
+  });
+
+  it("uses default when env var is not set", () => {
+    const input = "url: ${UNSET_VAR:-http://localhost:3001}/api/healthy";
+    expect(interpolateEnvVars(input)).toBe("url: http://localhost:3001/api/healthy");
+  });
+
+  it("prefers env var over default when both exist", () => {
+    const input = "url: ${MOCK_SERVICES_URL:-http://localhost:3001}/api/healthy";
+    expect(interpolateEnvVars(input)).toBe("url: https://mock.example.com/api/healthy");
+  });
+
+  it("handles multiple substitutions in one string", () => {
+    vi.stubEnv("OTHER_VAR", "world");
+    const input = "${MOCK_SERVICES_URL} and ${OTHER_VAR}";
+    expect(interpolateEnvVars(input)).toBe("https://mock.example.com and world");
+  });
+
+  it("leaves unset vars without defaults as empty string", () => {
+    const input = "url: ${TOTALLY_MISSING}/api";
+    expect(interpolateEnvVars(input)).toBe("url: /api");
   });
 });

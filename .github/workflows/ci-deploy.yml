@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - "terraform/**"
       - "**.md"
 
 jobs:
@@ -56,21 +55,6 @@ jobs:
           docker push $ECR_REGISTRY/service-monitor/mock-services:$IMAGE_TAG
           docker push $ECR_REGISTRY/service-monitor/mock-services:latest
 
-      - name: Read mock-services URL from SSM
-        id: ssm
-        run: |
-          MOCK_URL=$(aws ssm get-parameter \
-            --name "/service-monitor/mock-services-url" \
-            --query "Parameter.Value" \
-            --output text)
-          echo "mock_url=$MOCK_URL" >> "$GITHUB_OUTPUT"
-
-      - name: Generate production services.yaml
-        run: |
-          sed 's|http://mock-services:3001|${{ steps.ssm.outputs.mock_url }}|g' \
-            services.yaml > services.yaml.tmp
-          mv services.yaml.tmp services.yaml
-
       - name: Build and push web image
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
@@ -83,3 +67,21 @@ jobs:
                         .
           docker push $ECR_REGISTRY/service-monitor/web:$IMAGE_TAG
           docker push $ECR_REGISTRY/service-monitor/web:latest
+
+      # Terraform updates both image references and env vars in one apply
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5"
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="ecr_web_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/service-monitor/web" \
+            -var="ecr_mock_services_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/service-monitor/mock-services" \
+            -var="anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}"

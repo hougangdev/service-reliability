@@ -1,12 +1,7 @@
-name: Terraform
+name: Terraform Plan
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "terraform/**"
-      - "!terraform/bootstrap/**"
   pull_request:
     branches: [main]
     paths:
@@ -14,7 +9,7 @@ on:
       - "!terraform/bootstrap/**"
 
 jobs:
-  terraform:
+  plan:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,7 +42,12 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        run: terraform plan -no-color -var="db_password=${{ secrets.DB_PASSWORD }}" -var="ecr_web_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/service-monitor/web" -var="ecr_mock_services_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/service-monitor/mock-services"
+        run: |
+          terraform plan -no-color \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="ecr_web_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/service-monitor/web" \
+            -var="ecr_mock_services_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/service-monitor/mock-services" \
+            -var="anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}"
         continue-on-error: true
 
       - name: Post Plan to PR
@@ -71,7 +71,3 @@ jobs:
       - name: Terraform Plan Status
         if: steps.plan.outcome == 'failure'
         run: exit 1
-
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -var="db_password=${{ secrets.DB_PASSWORD }}" -var="ecr_web_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/service-monitor/web" -var="ecr_mock_services_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/service-monitor/mock-services"

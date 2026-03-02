@@ -257,7 +257,9 @@ export function ServicesTable({ initialData }: Props) {
                     return (
                       <div className="flex flex-col gap-1">
                         <LatencySparkline
-                          data={chrono.map((c) => c.latencyMs).filter((v): v is number => v != null)}
+                          data={chrono
+                            .filter((c) => c.latencyMs != null)
+                            .map((c) => ({ value: c.latencyMs!, time: c.checkedAt }))}
                           width={80}
                           height={20}
                         />

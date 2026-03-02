@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
+import { buildPoolConfig } from "./pool-config";
 
 // Defer throwing until a query is actually executed so `next build` doesn't
 // fail when DATABASE_URL isn't set in the build environment.
@@ -9,14 +10,7 @@ function getDb() {
   if (!connectionString) {
     throw new Error("DATABASE_URL environment variable is required");
   }
-  const pool = new Pool({
-    connectionString,
-    max: 20,
-    min: 2,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
-    statement_timeout: 10_000,
-  });
+  const pool = new Pool(buildPoolConfig(connectionString));
   return drizzle(pool, { schema });
 }
 

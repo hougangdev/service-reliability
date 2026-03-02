@@ -2,6 +2,17 @@ import { parse as parseYaml } from "yaml";
 import { configFileSchema, type ConfigFile, type ServiceConfig } from "./schema";
 
 /**
+ * Replace ${VAR} and ${VAR:-default} patterns with environment variable
+ * values. Used to make services.yaml portable across Docker Compose
+ * (default) and production (env-var override).
+ */
+export function interpolateEnvVars(content: string): string {
+  return content.replace(/\$\{(\w+)(?::-(.*?))?\}/g, (_match, name, fallback) => {
+    return process.env[name] ?? fallback ?? "";
+  });
+}
+
+/**
  * Parse and validate a YAML string containing service definitions.
  * Throws a descriptive error on any validation or parse failure.
  */
@@ -9,7 +20,7 @@ export function parseConfig(yamlContent: string): ConfigFile {
   let raw: unknown;
 
   try {
-    raw = parseYaml(yamlContent);
+    raw = parseYaml(interpolateEnvVars(yamlContent));
   } catch (err) {
     throw new Error(`Failed to parse YAML: ${(err as Error).message}`);
   }

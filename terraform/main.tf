@@ -21,4 +21,5 @@ module "apprunner" {
   ecr_web_url           = var.ecr_web_url
   ecr_mock_services_url = var.ecr_mock_services_url
   database_url          = module.database.database_url
+  anthropic_api_key     = var.anthropic_api_key
 }

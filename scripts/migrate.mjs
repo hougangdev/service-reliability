@@ -17,7 +17,28 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: DATABASE_URL });
+// pg v9+ treats sslmode=require as verify-full, which rejects RDS certs.
+// Strip sslmode from URL and set ssl explicitly — pg-connection-string
+// parses sslmode AFTER pool config and would override our ssl setting.
+const sslMode = DATABASE_URL.match(/[?&]sslmode=([^&]*)/)?.[1];
+let cleanedUrl = DATABASE_URL;
+let ssl = undefined;
+
+if (sslMode === "require" || sslMode === "prefer") {
+  cleanedUrl = DATABASE_URL.replace(/([?&])sslmode=[^&]*(&?)/, (_, prefix, suffix) => {
+    if (prefix === "?" && suffix === "&") return "?";
+    if (prefix === "?" && suffix === "") return "";
+    return "";
+  });
+  ssl = { rejectUnauthorized: false };
+}
+
+const pool = new Pool({
+  connectionString: cleanedUrl,
+  ssl,
+  connectionTimeoutMillis: 10_000,
+  statement_timeout: 30_000,
+});
 const db = drizzle(pool);
 
 try {

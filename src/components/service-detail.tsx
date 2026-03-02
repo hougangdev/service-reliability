@@ -66,8 +66,8 @@ export function ServiceDetailView({ serviceId, initialService, initialHistory }:
   const latencies = history.checks
     .slice()
     .reverse()
-    .map((c) => c.latencyMs)
-    .filter((v): v is number => v !== null);
+    .filter((c) => c.latencyMs !== null)
+    .map((c) => ({ value: c.latencyMs!, time: c.checkedAt }));
 
   const upCount = history.checks.filter((c) => c.ok).length;
   const uptimePct =

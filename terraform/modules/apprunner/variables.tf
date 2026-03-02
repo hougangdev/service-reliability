@@ -18,3 +18,10 @@ variable "database_url" {
   type        = string
   sensitive   = true
 }
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for AI incident summaries"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

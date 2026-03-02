@@ -1,33 +1,47 @@
 # Service Reliability Monitor — service definitions
-# URLs point at the mock server when running via docker-compose (hostname: mock-services)
-# For local dev without Docker, use http://localhost:3001
+# MOCK_SERVICES_URL defaults to docker-compose hostname; override via env var
+# for production (App Runner) or local dev (http://localhost:3001).
 
 services:
+  # --- Mock services (test scenarios) ---
   - name: healthy-api
-    url: http://mock-services:3001/api/healthy
-    env: default
+    url: ${MOCK_SERVICES_URL:-http://mock-services:3001}/api/healthy
+    env: mock
     expected_version: "2.1.0"
     version_path: "$.version"
 
   - name: degraded-api
-    url: http://mock-services:3001/api/degraded
-    env: default
+    url: ${MOCK_SERVICES_URL:-http://mock-services:3001}/api/degraded
+    env: mock
     expected_version: "2.1.0"
     version_path: "$.version"
 
   - name: wrong-version-api
-    url: http://mock-services:3001/api/wrong-version
-    env: default
+    url: ${MOCK_SERVICES_URL:-http://mock-services:3001}/api/wrong-version
+    env: mock
     expected_version: "2.1.0"
     version_path: "$.version"
 
   - name: failing-api
-    url: http://mock-services:3001/api/failing
-    env: default
+    url: ${MOCK_SERVICES_URL:-http://mock-services:3001}/api/failing
+    env: mock
     expected_version: "2.1.0"
     version_path: "$.version"
 
   - name: timeout-api
-    url: http://mock-services:3001/api/timeout
-    env: default
+    url: ${MOCK_SERVICES_URL:-http://mock-services:3001}/api/timeout
+    env: mock
     # No expected_version — used to test timeout handling
+
+  # --- Public APIs (real-world monitoring) ---
+  - name: github-api
+    url: https://api.github.com
+    env: production
+
+  - name: jsonplaceholder
+    url: https://jsonplaceholder.typicode.com/posts/1
+    env: production
+
+  - name: httpbin
+    url: https://httpbin.org/get
+    env: production

@@ -25,3 +25,10 @@ variable "ecr_mock_services_url" {
   description = "ECR repository URL for the mock-services image"
   type        = string
 }
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for AI incident summaries"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

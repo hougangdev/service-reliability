@@ -45,7 +45,7 @@ resource "aws_apprunner_service" "mock" {
       }
     }
 
-    auto_deployments_enabled = true
+    auto_deployments_enabled = false
   }
 
   instance_configuration {
@@ -94,20 +94,24 @@ resource "aws_apprunner_service" "web" {
       image_configuration {
         port = "3000"
 
-        runtime_environment_variables = {
-          DATABASE_URL           = var.database_url
-          NODE_ENV               = "production"
-          POLL_INTERVAL_MS       = "30000"
-          CHECK_TIMEOUT_MS       = "3000"
-          CONCURRENCY_LIMIT      = "10"
-          ALERT_THRESHOLD        = "3"
-          RETENTION_DAYS         = "7"
-          MAX_CHECKS_PER_SERVICE = "500"
-        }
+        runtime_environment_variables = merge(
+          {
+            DATABASE_URL           = var.database_url
+            NODE_ENV               = "production"
+            POLL_INTERVAL_MS       = "30000"
+            CHECK_TIMEOUT_MS       = "3000"
+            CONCURRENCY_LIMIT      = "10"
+            ALERT_THRESHOLD        = "3"
+            RETENTION_DAYS         = "7"
+            MAX_CHECKS_PER_SERVICE = "500"
+            MOCK_SERVICES_URL      = "https://${aws_apprunner_service.mock.service_url}"
+          },
+          var.anthropic_api_key != "" ? { ANTHROPIC_API_KEY = var.anthropic_api_key } : {}
+        )
       }
     }
 
-    auto_deployments_enabled = true
+    auto_deployments_enabled = false
   }
 
   instance_configuration {
@@ -117,9 +121,10 @@ resource "aws_apprunner_service" "web" {
 
   health_check_configuration {
     protocol            = "HTTP"
-    path                = "/api/monitor/health"
+    path                = "/api/health"
+    timeout             = 5
     healthy_threshold   = 1
-    unhealthy_threshold = 5
+    unhealthy_threshold = 15
     interval            = 10
   }
 

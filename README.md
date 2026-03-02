@@ -27,6 +27,8 @@ docker compose up --build
 # Mock services → http://localhost:3001
 ```
 
+**Live demo:** https://muvskmgspm.ap-southeast-1.awsapprunner.com
+
 The `app` container automatically applies database migrations on startup before booting the Next.js server.
 
 ### Adding services to monitor
@@ -47,10 +49,12 @@ services:
     expected_version: "3.0.0"
     version_path: "$.version"        # extract from JSON response body
 
-  # Version from response header instead
-  - name: legacy-service
-    url: https://legacy.example.com/ping
-    version_header: X-App-Version    # extract from HTTP header
+  # Mock service with env var interpolation (defaults to Docker Compose hostname)
+  - name: healthy-api
+    url: ${MOCK_SERVICES_URL:-http://mock-services:3001}/api/healthy
+    env: mock
+    expected_version: "2.1.0"
+    version_path: "$.version"
 ```
 
 After editing, restart the poller (`docker compose restart app` or restart `npm run dev`) to pick up changes.
@@ -149,17 +153,15 @@ Defines which endpoints to monitor. The poller reads this file on startup and up
 
 ```yaml
 services:
-  - name: Healthy API
-    url: http://mock-services:3001/api/healthy
-    env: demo
+  - name: healthy-api
+    url: ${MOCK_SERVICES_URL:-http://mock-services:3001}/api/healthy
+    env: mock
     expected_version: "2.1.0"
     version_path: "$.version"          # JSON path extraction
 
-  - name: Auth Service
-    url: https://api.example.com/health
-    env: production
-    expected_version: "3.0.0"
-    version_header: X-App-Version      # HTTP header extraction
+  - name: github-api
+    url: https://api.github.com
+    env: production                    # No version tracking — just availability
 ```
 
 | Field              | Required | Description                                       |
@@ -200,7 +202,7 @@ Returns all services with their latest check snapshot.
     "id": "uuid",
     "name": "Healthy API",
     "url": "http://...",
-    "env": "demo",
+    "env": "mock",
     "isActive": true,
     "expectedVersion": "2.1.0",
     "latestCheck": {
@@ -309,8 +311,8 @@ service-reliability/
 
 Production runs on **AWS App Runner** with two services:
 
-- **web** — Next.js (dashboard + API routes + embedded poller). Auto-deploys on ECR image push. Health-checked at `/api/monitor/health`.
-- **mock-services** — Express demo server. Auto-deploys independently. URL stored in SSM Parameter Store and injected into `services.yaml` at build time.
+- **web** — Next.js (dashboard + API routes + embedded poller). Auto-deploys on ECR image push. Health-checked at `/api/health`.
+- **mock-services** — Express demo server. Auto-deploys independently. URL injected at runtime via `MOCK_SERVICES_URL` env var (set by Terraform from the mock service's App Runner URL).
 
 **RDS PostgreSQL** (`db.t3.micro`, single-AZ, Postgres 16) serves as the shared data store. Environment variables — including `DATABASE_URL` — are set via Terraform `runtime_environment_variables`, not Secrets Manager. The database password is passed as a Terraform variable sourced from the `DB_PASSWORD` GitHub Secret.
 
