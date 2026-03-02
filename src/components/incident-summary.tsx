@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 
 type SummaryResponse = {
@@ -73,10 +73,8 @@ export function IncidentSummary() {
       )}
 
       {data && !error && (
-        <div className="space-y-2">
-          <p className="text-sm text-zinc-300 leading-relaxed" data-testid="summary-text">
-            {data.summary}
-          </p>
+        <div className="space-y-3">
+          <FormattedSummary text={data.summary} />
           {data.generatedAt && (
             <p className="text-[10px] text-zinc-600">
               Generated {new Date(data.generatedAt).toLocaleTimeString()}
@@ -90,6 +88,29 @@ export function IncidentSummary() {
           Click the button to analyze current service health with AI.
         </p>
       )}
+    </div>
+  );
+}
+
+/** Renders simple markdown (bold + paragraphs) without a full markdown library. */
+function FormattedSummary({ text }: { text: string }) {
+  const paragraphs = useMemo(() => text.split(/\n\n+/), [text]);
+
+  return (
+    <div className="space-y-2 text-sm text-zinc-300 leading-relaxed" data-testid="summary-text">
+      {paragraphs.map((para, i) => (
+        <p key={i}>
+          {para.split(/(\*\*[^*]+\*\*)/).map((segment, j) =>
+            segment.startsWith("**") && segment.endsWith("**") ? (
+              <strong key={j} className="text-zinc-100 font-semibold">
+                {segment.slice(2, -2)}
+              </strong>
+            ) : (
+              <span key={j}>{segment}</span>
+            )
+          )}
+        </p>
+      ))}
     </div>
   );
 }
