@@ -1,5 +1,6 @@
-import { queryAllServices } from "@/lib/services/queries";
+import { queryAllServices, queryRecentChecksForServices } from "@/lib/services/queries";
 import { ServicesTable } from "@/components/services-table";
+import { IncidentSummary } from "@/components/incident-summary";
 import { Header } from "@/components/header";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,13 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   // Initial data via SSR — React Query takes over for auto-refresh
   const initialData = await queryAllServices();
+
+  // Enrich active services with recent checks for sparklines/timeline
+  const activeIds = initialData.filter((s) => s.isActive).map((s) => s.id);
+  const recentMap = await queryRecentChecksForServices(activeIds, 20);
+  for (const svc of initialData) {
+    svc.recentChecks = recentMap.get(svc.id) ?? [];
+  }
 
   const upCount = initialData.filter((s) => s.latest?.ok).length;
   const downCount = initialData.filter((s) => s.latest?.ok === false).length;
@@ -22,6 +30,10 @@ export default async function HomePage() {
           <StatCard label="Up" value={upCount} colour="text-emerald-400" />
           <StatCard label="Down" value={downCount} colour="text-red-400" />
           <StatCard label="Version Drift" value={driftCount} colour="text-yellow-400" />
+        </div>
+
+        <div className="mb-6">
+          <IncidentSummary />
         </div>
 
         <ServicesTable initialData={initialData} />

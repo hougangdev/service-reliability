@@ -28,7 +28,7 @@ export function StatusBadge({ ok, isActive = true, className }: Props) {
     <Badge variant={ok ? "up" : "down"} className={cn("font-semibold", className)}>
       <span
         className={cn(
-          "inline-block h-1.5 w-1.5 rounded-full",
+          "inline-block h-1.5 w-1.5 rounded-full animate-pulse-dot",
           ok ? "bg-emerald-400" : "bg-red-400"
         )}
       />

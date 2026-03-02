@@ -1,8 +1,9 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, sql, inArray } from "drizzle-orm";
 import { db, services, serviceChecks } from "@/lib/db";
 import type { Service, ServiceCheck } from "@/lib/db/schema";
 import type {
   CheckSnapshot,
+  RecentCheck,
   ServiceSummary,
   ServiceDetail,
   HistoryCheck,
@@ -142,6 +143,45 @@ export async function queryServiceHistory(
   }));
 
   return { checks, total: countRow?.count ?? 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Query: recent checks for multiple services (bulk, for sparklines/timeline)
+// ---------------------------------------------------------------------------
+
+export async function queryRecentChecksForServices(
+  serviceIds: string[],
+  perService = 20
+): Promise<Map<string, RecentCheck[]>> {
+  if (serviceIds.length === 0) return new Map();
+
+  // Single query using the composite (serviceId, checkedAt) index.
+  // We fetch all recent checks and limit per-service in JS — at this scale
+  // (~20 services × 20 checks = 400 rows) it's simpler than a window function.
+  const rows = await db
+    .select({
+      serviceId: serviceChecks.serviceId,
+      ok: serviceChecks.ok,
+      latencyMs: serviceChecks.latencyMs,
+      checkedAt: serviceChecks.checkedAt,
+    })
+    .from(serviceChecks)
+    .where(inArray(serviceChecks.serviceId, serviceIds))
+    .orderBy(serviceChecks.serviceId, desc(serviceChecks.checkedAt));
+
+  const result = new Map<string, RecentCheck[]>();
+  for (const row of rows) {
+    const existing = result.get(row.serviceId) ?? [];
+    if (existing.length >= perService) continue;
+    existing.push({
+      ok: row.ok,
+      latencyMs: row.latencyMs,
+      checkedAt: row.checkedAt.toISOString(),
+    });
+    result.set(row.serviceId, existing);
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

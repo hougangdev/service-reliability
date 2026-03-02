@@ -11,6 +11,12 @@ export type CheckSnapshot = {
   checkedAt: string; // ISO-8601
 };
 
+export type RecentCheck = {
+  ok: boolean;
+  latencyMs: number | null;
+  checkedAt: string;
+};
+
 export type ServiceSummary = {
   id: string;
   name: string;
@@ -20,6 +26,7 @@ export type ServiceSummary = {
   isActive: boolean;
   drift: boolean | null; // null = version unknown
   latest: CheckSnapshot | null;
+  recentChecks?: RecentCheck[];
 };
 
 export type ServiceDetail = ServiceSummary & {

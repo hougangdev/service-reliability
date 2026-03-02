@@ -8,6 +8,7 @@ vi.mock("@/lib/services/queries", () => ({
   queryAllServices: vi.fn(),
   queryServiceById: vi.fn(),
   queryServiceHistory: vi.fn(),
+  queryRecentChecksForServices: vi.fn(),
 }));
 
 import * as queries from "@/lib/services/queries";
@@ -66,16 +67,33 @@ const mockHistory = {
 describe("GET /api/services", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns 200 with array of service summaries", async () => {
-    vi.mocked(queries.queryAllServices).mockResolvedValueOnce([mockSummary]);
+  it("returns 200 with array of service summaries enriched with recentChecks", async () => {
+    vi.mocked(queries.queryAllServices).mockResolvedValueOnce([{ ...mockSummary }]);
+    const recentMap = new Map([
+      ["uuid-1", [{ ok: true, latencyMs: 42, checkedAt: "2024-01-01T00:00:00.000Z" }]],
+    ]);
+    vi.mocked(queries.queryRecentChecksForServices).mockResolvedValueOnce(recentMap);
     const res = await getServices();
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual([mockSummary]);
+    expect(body[0].recentChecks).toEqual([
+      { ok: true, latencyMs: 42, checkedAt: "2024-01-01T00:00:00.000Z" },
+    ]);
+  });
+
+  it("skips inactive services for recentChecks enrichment", async () => {
+    const inactiveSvc = { ...mockSummary, id: "uuid-2", isActive: false };
+    vi.mocked(queries.queryAllServices).mockResolvedValueOnce([{ ...mockSummary }, inactiveSvc]);
+    vi.mocked(queries.queryRecentChecksForServices).mockResolvedValueOnce(new Map());
+    const res = await getServices();
+    expect(res.status).toBe(200);
+    // Should only have been called with the active service ID
+    expect(queries.queryRecentChecksForServices).toHaveBeenCalledWith(["uuid-1"], 20);
   });
 
   it("returns an empty array when no services exist", async () => {
     vi.mocked(queries.queryAllServices).mockResolvedValueOnce([]);
+    vi.mocked(queries.queryRecentChecksForServices).mockResolvedValueOnce(new Map());
     const res = await getServices();
     expect(res.status).toBe(200);
     const body = await res.json();

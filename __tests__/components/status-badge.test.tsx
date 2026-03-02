@@ -28,4 +28,16 @@ describe("StatusBadge", () => {
     render(<StatusBadge ok={true} />);
     expect(screen.queryByText("INACTIVE")).toBeNull();
   });
+
+  it("applies pulse animation to dot when ok=true", () => {
+    const { container } = render(<StatusBadge ok={true} />);
+    const dot = container.querySelector(".animate-pulse-dot");
+    expect(dot).toBeTruthy();
+  });
+
+  it("applies pulse animation to dot when ok=false", () => {
+    const { container } = render(<StatusBadge ok={false} />);
+    const dot = container.querySelector(".animate-pulse-dot");
+    expect(dot).toBeTruthy();
+  });
 });

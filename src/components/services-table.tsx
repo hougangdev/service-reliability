@@ -2,10 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState, useMemo } from "react";
-import { RefreshCw } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { RefreshCw, AlertTriangle, X } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { DriftIndicator } from "@/components/drift-indicator";
+import { LatencySparkline } from "@/components/latency-sparkline";
+import { StatusTimeline } from "@/components/status-timeline";
+import type { RecentCheck } from "@/lib/services/types";
 import {
   Table,
   TableBody,
@@ -30,6 +33,12 @@ function relativeTime(iso: string): string {
   return `${Math.round(diff / 3_600_000)}h ago`;
 }
 
+export function computeUptime(checks: RecentCheck[]): string {
+  if (checks.length === 0) return "—";
+  const upCount = checks.filter((c) => c.ok).length;
+  return `${((upCount / checks.length) * 100).toFixed(1)}%`;
+}
+
 function latencyColour(ms: number | null): string {
   if (ms === null) return "text-zinc-500";
   if (ms < 200) return "text-emerald-400";
@@ -47,7 +56,9 @@ export function ServicesTable({ initialData }: Props) {
     dir: "asc",
   });
 
-  const { data = initialData, dataUpdatedAt, isFetching } = useQuery<ServiceSummary[]>({
+  const [errorDismissed, setErrorDismissed] = useState(false);
+
+  const { data = initialData, dataUpdatedAt, isFetching, isError } = useQuery<ServiceSummary[]>({
     queryKey: ["services"],
     queryFn: async () => {
       const res = await fetch("/api/services");
@@ -57,6 +68,11 @@ export function ServicesTable({ initialData }: Props) {
     initialData,
     refetchInterval: REFETCH_INTERVAL,
   });
+
+  // Reset dismiss when error state changes (new error after recovery)
+  useEffect(() => {
+    if (isError) setErrorDismissed(false);
+  }, [isError]);
 
   const envs = useMemo(
     () => ["all", ...Array.from(new Set(data.map((s) => s.env))).sort()],
@@ -130,6 +146,26 @@ export function ServicesTable({ initialData }: Props) {
         </div>
       </div>
 
+      {/* error banner */}
+      {isError && !errorDismissed && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-lg border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-300"
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+            <span>Unable to reach the API — displaying last known data.</span>
+          </div>
+          <button
+            onClick={() => setErrorDismissed(true)}
+            className="text-red-400 hover:text-red-200 shrink-0"
+            aria-label="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* table */}
       <div className="rounded-lg border border-zinc-800 overflow-hidden">
         <Table>
@@ -159,6 +195,7 @@ export function ServicesTable({ initialData }: Props) {
               >
                 Latency <SortIcon k="latencyMs" />
               </TableHead>
+              <TableHead>Health</TableHead>
               <TableHead>Expected</TableHead>
               <TableHead>Observed</TableHead>
               <TableHead>Drift</TableHead>
@@ -169,7 +206,7 @@ export function ServicesTable({ initialData }: Props) {
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center text-zinc-500 py-10"
                 >
                   No services found.
@@ -196,7 +233,14 @@ export function ServicesTable({ initialData }: Props) {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <StatusBadge ok={svc.latest?.ok ?? null} isActive={svc.isActive} />
+                  <div className="flex flex-col items-start gap-0.5">
+                    <StatusBadge ok={svc.latest?.ok ?? null} isActive={svc.isActive} />
+                    {svc.recentChecks && svc.recentChecks.length > 0 && (
+                      <span className="text-[10px] text-zinc-500" data-testid="uptime-pct">
+                        {computeUptime(svc.recentChecks)}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <span className={cn("font-mono text-xs", latencyColour(svc.latest?.latencyMs ?? null))}>
@@ -204,6 +248,23 @@ export function ServicesTable({ initialData }: Props) {
                       ? `${svc.latest.latencyMs}ms`
                       : "—"}
                   </span>
+                </TableCell>
+                <TableCell>
+                  {(() => {
+                    const checks = svc.recentChecks ?? [];
+                    // Reverse to chronological order (oldest→newest) for sparkline
+                    const chrono = [...checks].reverse();
+                    return (
+                      <div className="flex flex-col gap-1">
+                        <LatencySparkline
+                          data={chrono.map((c) => c.latencyMs).filter((v): v is number => v != null)}
+                          width={80}
+                          height={20}
+                        />
+                        <StatusTimeline checks={chrono} max={15} />
+                      </div>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell>
                   <span className="font-mono text-xs text-zinc-300">

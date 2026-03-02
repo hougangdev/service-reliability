@@ -57,3 +57,13 @@
   background: hsl(var(--border));
   border-radius: 3px;
 }
+
+/* status dot pulse — subtle breathing effect so users can tell the page is live */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}

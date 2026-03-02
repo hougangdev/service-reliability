@@ -133,6 +133,7 @@ services:
 | `ALERT_WEBHOOK_URL`       | *(empty)*                  | Webhook for Slack/Discord/PagerDuty   |
 | `RETENTION_DAYS`          | `7`                        | Delete checks older than N days       |
 | `MAX_CHECKS_PER_SERVICE`  | `500`                      | Cap stored checks per service         |
+| `ANTHROPIC_API_KEY`       | *(empty)*                  | Enables AI incident summaries (Haiku) |
 | `NODE_ENV`                | `development`              | `development` or `production`         |
 
 ---
@@ -174,6 +175,17 @@ Monitor heartbeat — returns `ok` and timestamp of last completed poll.
 
 ```json
 { "ok": true, "lastRunAt": "2026-01-01T00:00:00.000Z" }
+```
+
+### `GET /api/incidents/summary`
+AI-generated incident summary. Analyzes current service health, detects incidents (down, flapping, drift, degraded), and uses Claude Haiku to produce an actionable summary. Returns 503 if `ANTHROPIC_API_KEY` is not configured.
+
+```json
+{
+  "summary": "failing-api is currently down with a 503 error...",
+  "incidents": [{ "serviceName": "failing-api", "type": "down", "severity": "critical", "details": "..." }],
+  "generatedAt": "2026-01-01T00:00:00.000Z"
+}
 ```
 
 ### `POST /api/run-once`
@@ -238,6 +250,7 @@ service-reliability/
 | **Dashboard data** | SSR initial data + TanStack Query refresh | Fast first paint via server render. Client auto-refreshes every 15s without a full page reload. |
 | **Sparklines** | Pure SVG | No heavy charting library. Keeps bundle small. |
 | **Testing** | Full TDD (Vitest) | Tests written before implementation for all core logic, API routes, and components. |
+| **AI incident summary** | Claude Haiku (claude-haiku-4-5-20251001) | Fast (<1s), cheap. On-demand only (no auto-fetch) to avoid burning API credits. Graceful degradation when API key is missing. |
 
 ---
 
